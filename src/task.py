@@ -1,7 +1,5 @@
 import argparse
 import ee
-import os
-from datetime import timedelta
 from task_base import HIITask
 
 
@@ -21,11 +19,9 @@ class HIIStats(HIITask):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.cumulative = (
-            kwargs.get("cumulative") or os.environ.get("cumulative") or False
+        self.hii, _ = self.get_most_recent_image(
+            ee.ImageCollection(self.inputs["hii"]["ee_path"])
         )
-
-        self.hii = ee.ImageCollection(self.inputs["hii"]["ee_path"])
         self.area = ee.Image.pixelArea().divide(1000000)
         self.stats_reducer = (
             ee.Reducer.mean()
@@ -35,15 +31,15 @@ class HIIStats(HIITask):
             .combine(ee.Reducer.sum(), None, True)
         )
 
-    def calc_stats(self, hiidate):
-        hiidate_stats_image = hiidate.addBands(self.area)
+    def calc(self):
+        hiidate_stats_image = self.hii.addBands(self.area)
 
         def get_feature_stats(feature):
             stats = hiidate_stats_image.reduceRegion(
                 reducer=self.stats_reducer,
                 geometry=feature.geometry(),
-                crs=hiidate.projection(),
-                scale=hiidate.projection().nominalScale(),
+                crs=self.hii.projection(),
+                scale=self.hii.projection().nominalScale(),
                 maxPixels=1e15,
             )
 
@@ -66,21 +62,11 @@ class HIIStats(HIITask):
             return feature.set("stats", results)
 
         country_stats = self.countries.map(get_feature_stats)
-        country_stats_path = f"{self.taskdate.isoformat()}/hii_stats_country_{self.taskdate.isoformat()}"
+        country_stats_path = (
+            f"{self.taskdate.isoformat()}/hii_stats_country_{self.taskdate.isoformat()}"
+        )
         self.table2storage(country_stats, "hii-stats", country_stats_path)
         # Calculate zonal stats over other polygons here
-
-    def calc(self):
-        if not self.cumulative:
-            hiidate, _ = self.get_most_recent_image(self.hii)
-            self.calc_stats(hiidate)
-        else:
-            # map over the image collection, running these functions on each image, and the return a collection of collections then flatten
-            # filterdate = self.taskdate + timedelta(days=1)
-            # filterdate = ee.Date(filterdate.strftime(self.DATE_FORMAT))
-            # hiidates = self.hii.filterDate("1900-01-01", filterdate)
-
-            pass
 
     def check_inputs(self):
         super().check_inputs()
@@ -89,11 +75,6 @@ class HIIStats(HIITask):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--taskdate")
-    parser.add_argument(
-        "--cumulative",
-        action="store_true",
-        help="calculate for all available HII images up to task date",
-    )
     parser.add_argument(
         "--overwrite",
         action="store_true",
