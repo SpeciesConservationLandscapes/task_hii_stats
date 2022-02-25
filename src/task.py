@@ -61,11 +61,24 @@ class HIIStats(HIITask):
 
             return feature.set("stats", results)
 
+        # Global stats
+        global_poly = ee.Geometry.Polygon(
+            coords=self.aoi[0], proj=self.crs, geodesic=False
+        )
+        global_stats = get_feature_stats(ee.Feature(global_poly, {}))
+        global_stats_fc = ee.FeatureCollection(global_stats)
+        global_stats_path = (
+            f"{self.taskdate.isoformat()}/hii_stats_global_{self.taskdate.isoformat()}"
+        )
+        self.table2storage(global_stats_fc, "hii-stats", global_stats_path)
+
+        # Stats per country
         country_stats = self.countries.map(get_feature_stats)
         country_stats_path = (
             f"{self.taskdate.isoformat()}/hii_stats_country_{self.taskdate.isoformat()}"
         )
         self.table2storage(country_stats, "hii-stats", country_stats_path)
+
         # Calculate zonal stats over other polygons here
 
     def check_inputs(self):
