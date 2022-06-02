@@ -1,14 +1,19 @@
 import argparse
 import ee
-from task_base import HIITask
+from task_base import HIITask, PROJECTS
 
 
 class HIIStats(HIITask):
     inputs = {
         "hii": {
             "ee_type": HIITask.IMAGECOLLECTION,
-            "ee_path": "projects/HII/v1/hii",
+            "ee_path": f"{PROJECTS}/HII/v1/hii",
             "maxage": 1,
+        },
+        "states": {
+            "ee_type": HIITask.FEATURECOLLECTION,
+            "ee_path": f"{PROJECTS}/SCL/v1/source/gadm404_state_simp",
+            "static": True,  # TODO: make dynamic
         },
     }
 
@@ -30,6 +35,7 @@ class HIIStats(HIITask):
             .combine(ee.Reducer.stdDev(), None, True)
             .combine(ee.Reducer.sum(), None, True)
         )
+        self.states = ee.FeatureCollection(self.inputs["states"]["ee_path"])
 
     def calc(self):
         hiidate_stats_image = self.hii.addBands(self.area)
@@ -79,7 +85,12 @@ class HIIStats(HIITask):
         )
         self.table2storage(country_stats, "hii-stats", country_stats_path)
 
-        # Calculate zonal stats over other polygons here
+        # Stats per state/province
+        # state_stats = self.states.map(get_feature_stats)
+        # state_stats_path = (
+        #     f"{self.taskdate.isoformat()}/hii_stats_state_{self.taskdate.isoformat()}"
+        # )
+        # self.table2storage(state_stats, "hii-stats", state_stats_path)
 
     def check_inputs(self):
         super().check_inputs()
